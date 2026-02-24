@@ -4,30 +4,26 @@ const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 require('dotenv').config();
-const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 // API keys are now securely loaded from .env file
 const OCR_API_KEY = process.env.OCR_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 // Set up server to serve your HTML/CSS/JS files from the "public" folder
 app.use(express.static('public'));
 
-// Note: Ensure the "uploads" directory exists, or multer will throw an error
-if (!fs.existsSync('./uploads')) {
-    fs.mkdirSync('./uploads');
-}
+// Note: On Vercel, the filesystem is read-only except for /tmp
+const uploadDir = os.tmpdir();
 
 // Set up Multer to handle image uploads, keeping original file extensions
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, 'uploads/')
+        cb(null, uploadDir)
     },
     filename: function (req, file, cb) {
         // Keep the original extension (e.g. .jpg, .png)
@@ -80,14 +76,12 @@ app.post('/api/scan', upload.single('medicineImage'), async (req, res) => {
 
         console.log("OCR Extracted Text:\n", extractedText);
 
-        // --- NEW: Phase 5: Google Gemini API Integration ---
-
         let extractedMedicineName = "Unknown";
         let usage = "Information not found.";
         let warnings = "Information not found.";
 
         try {
-            console.log("Asking Gemini to analyze the OCR text...");
+            console.log("Asking OpenRouter to analyze the OCR text...");
 
             const prompt = `
             You are a medical assistant looking at text extracted from a medicine box or bottle using OCR.
@@ -103,16 +97,28 @@ app.post('/api/scan', upload.single('medicineImage'), async (req, res) => {
             3. Common major warnings, side effects, or precautions for this medicine. Do not just say "none listed in text". You must provide actual warnings for the drug you identified.
             
             Return your answer STRICTLY as a JSON object with these exact keys: "name", "usage", "warnings".
-            Do not include any formatting like Markdown code blocks (\`\`\`json). Just return the raw JSON object.
+            Do not include any formatting like Markdown code blocks (json). Just return the raw JSON object.
             `;
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
+            const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+                model: 'google/gemini-2.5-flash',
+                messages: [
+                    {
+                        role: 'user',
+                        content: prompt
+                    }
+                ],
+                max_tokens: 300
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'http://localhost:3000', // Optional, for OpenRouter rankings
+                    'X-Title': 'Medicine Search App', // Optional
+                    'Content-Type': 'application/json'
+                }
             });
 
-            // The response should be a JSON string, but sometimes LLMs add formatting anyway
-            let aiText = response.text;
+            let aiText = response.data.choices[0].message.content.trim();
 
             // Cleanup any accidental markdown block formatting just in case
             if (aiText.startsWith('```json')) {
@@ -131,11 +137,11 @@ app.post('/api/scan', upload.single('medicineImage'), async (req, res) => {
             usage = aiData.usage || "Information not found.";
             warnings = aiData.warnings || "Information not found.";
 
-            console.log("Gemini successfully analyzed the medicine!");
+            console.log("OpenRouter successfully analyzed the medicine!");
 
         } catch (aiError) {
-            console.error("Gemini API Error:", aiError);
-            usage = "Could not analyze the medicine automatically. Please check your Gemini API key.";
+            console.error("OpenRouter API Error:", aiError.response ? aiError.response.data : aiError.message);
+            usage = "Could not analyze the medicine automatically. Please check your OpenRouter API key.";
         }
 
         // 7. Send everything back to the frontend
@@ -158,7 +164,12 @@ app.post('/api/scan', upload.single('medicineImage'), async (req, res) => {
     }
 });
 
-// Start the server
-app.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`);
-});
+// Export the app for Vercel
+module.exports = app;
+
+// Start the server locally
+if (require.main === module) {
+    app.listen(port, () => {
+        console.log(`Server is running at http://localhost:${port}`);
+    });
+}
