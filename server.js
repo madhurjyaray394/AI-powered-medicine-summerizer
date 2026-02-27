@@ -62,11 +62,6 @@ app.post('/api/scan', upload.single('medicineImage'), async (req, res) => {
             extractedText = ocrResponse.data.ParsedResults[0].ParsedText;
         }
 
-        // 5. Clean up the temporary uploaded image from our server
-        fs.unlink(req.file.path, (err) => {
-            if (err) console.error("Error deleting temp file:", err);
-        });
-
         // 6. Handle cases where no text was found or an API error occurred
         if (!extractedText || ocrResponse.data.IsErroredOnProcessing) {
             return res.status(400).json({
@@ -170,13 +165,14 @@ app.post('/api/scan', upload.single('medicineImage'), async (req, res) => {
 
     } catch (error) {
         console.error("Server Error:", error);
-
-        // Clean up temp file on error just in case
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlink(req.file.path, () => { });
-        }
-
         res.status(500).json({ error: 'An internal server error occurred during processing.' });
+    } finally {
+        // ALWAYS clean up temp file, regardless of success or error
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlink(req.file.path, (err) => {
+                if (err) console.error("Error deleting temp file in finally block:", err);
+            });
+        }
     }
 });
 
