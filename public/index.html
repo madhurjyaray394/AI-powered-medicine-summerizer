@@ -9,6 +9,38 @@
 </head>
 
 <body>
+    <header class="app-header">
+        <div class="logo-container">
+            <img src="logo.png" alt="MediFind Logo" class="logo-icon">
+            <span class="logo-text">MediFind</span>
+        </div>
+        <div class="menu-icon" onclick="toggleMenu()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </div>
+        <!-- Sidebar Menu -->
+        <nav class="side-menu" id="sideMenu">
+            <div class="close-btn" onclick="toggleMenu()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </div>
+            <ul class="menu-links">
+                <li><a href="#about">About</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Sidebar Menu Overlay -->
+    <div class="menu-overlay" id="menuOverlay" onclick="toggleMenu()"></div>
+
     <div class="container">
         <!-- Main Content -->
         <main>
@@ -55,7 +87,9 @@
                     </div>
                 </div>
 
-
+                <footer class="app-footer">
+                    &lt;/&gt; and design by Madhurjya Ray
+                </footer>
             </section>
 
             <!-- Results Section -->
@@ -65,17 +99,17 @@
                     <pre id="rawOcrText"></pre>
                 </div>
 
-                <div class="primary-card result-card">
+                <div class="result-card">
                     <h3>▷ Identified Name:</h3>
                     <p id="medicineName">-</p>
                 </div>
 
-                <div class="primary-card result-card">
+                <div class="result-card">
                     <h3>▷ What it is used for:</h3>
                     <p id="medicineUsage">-</p>
                 </div>
 
-                <div class="primary-card result-card warnings">
+                <div class="result-card warnings">
                     <h3>▷ Warnings & Precautions:</h3>
                     <p id="medicineWarnings">-</p>
                 </div>
@@ -89,12 +123,27 @@
 
                 <button type="button" id="searchAnotherBtn" class="m-btn" onclick="location.reload();">Search Another
                     image</button>
+
+                <footer class="app-footer">
+                    &lt;/&gt; and design by Madhurjya Ray
+                </footer>
             </section>
         </main>
     </div>
 
-
     <script>
+        function toggleMenu() {
+            const sideMenu = document.getElementById('sideMenu');
+            const menuOverlay = document.getElementById('menuOverlay');
+            if (sideMenu.classList.contains('open')) {
+                sideMenu.classList.remove('open');
+                menuOverlay.classList.remove('open');
+            } else {
+                sideMenu.classList.add('open');
+                menuOverlay.classList.add('open');
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const imgInput = document.getElementById('medicineImage');
             const ellipseIcon = document.getElementById('ellipseIcon');
