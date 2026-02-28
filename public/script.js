@@ -50,79 +50,11 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.disabled = true;
 
         try {
-            // Check file size. If it's > 300KB, use the canvas compression.
-            let fileToSend = file;
-            let fileName = file.name;
-            const fileSizeMB = file.size / (1024 * 1024);
-
-            if (fileSizeMB > 0.3) {
-                // --- Client-Side Image Compression (Optimized for Mobile Memory) ---
-                console.log(`File is ${fileSizeMB.toFixed(2)}MB, compressing...`);
-                fileToSend = await new Promise((resolve, reject) => {
-                    const img = new Image();
-                    const objectUrl = URL.createObjectURL(file);
-
-                    img.onload = () => {
-                        // Immediately revoke the object URL to free up precious mobile RAM
-                        URL.revokeObjectURL(objectUrl);
-
-                        const canvas = document.createElement('canvas');
-                        // Minimized max dimensions to save RAM during rendering
-                        const MAX_WIDTH = 800;
-                        const MAX_HEIGHT = 800;
-                        let width = img.width;
-                        let height = img.height;
-
-                        if (width > height) {
-                            if (width > MAX_WIDTH) {
-                                height *= MAX_WIDTH / width;
-                                width = MAX_WIDTH;
-                            }
-                        } else {
-                            if (height > MAX_HEIGHT) {
-                                width *= MAX_HEIGHT / height;
-                                height = MAX_HEIGHT;
-                            }
-                        }
-
-                        // Ensure dimensions are whole numbers
-                        canvas.width = Math.floor(width);
-                        canvas.height = Math.floor(height);
-                        const ctx = canvas.getContext('2d');
-
-                        // Use a background color just in case it's a transparent PNG
-                        ctx.fillStyle = '#FFFFFF';
-                        ctx.fillRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                        // Compress to JPEG with 0.8 quality
-                        canvas.toBlob(
-                            (blob) => {
-                                // Clear canvas memory explicitly
-                                canvas.width = 0;
-                                canvas.height = 0;
-
-                                if (blob) resolve(blob);
-                                else reject(new Error("Canvas to Blob failed"));
-                            },
-                            'image/jpeg',
-                            0.8
-                        );
-                    };
-                    img.onerror = () => {
-                        URL.revokeObjectURL(objectUrl);
-                        reject(new Error("Image failed to load for compression"));
-                    };
-                    img.src = objectUrl;
-                });
-                fileName = 'compressed.jpg';
-            } else {
-                console.log(`File is ${fileSizeMB.toFixed(2)}MB, skipping canvas compression to save memory.`);
-            }
-
-            // Create form data to send to our backend
+            // We skip client-side compression entirely and upload the raw file to the backend
+            // because loading 10MB+ live camera photos into an HTML Canvas or Image element 
+            // frequently causes "Out of Memory" crashes on iOS Safari and Android Chrome.
             const formData = new FormData();
-            formData.append('medicineImage', fileToSend, fileName);
+            formData.append('medicineImage', file, file.name);
             // Send the image to our local Node.js backend
             const response = await fetch('/api/scan', {
                 method: 'POST',
