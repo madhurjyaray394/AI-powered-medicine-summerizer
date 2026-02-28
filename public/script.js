@@ -44,51 +44,79 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.disabled = true;
 
         try {
-            // --- Client-Side Image Compression ---
-            const compressedBlob = await new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 1200; // Define a reasonable max width
-                    const MAX_HEIGHT = 1200; // Define a reasonable max height
-                    let width = img.width;
-                    let height = img.height;
+            // Check file size. If it's less than 1MB, skip the memory-intensive canvas compression entirely.
+            let fileToSend = file;
+            let fileName = file.name;
+            const fileSizeMB = file.size / (1024 * 1024);
 
-                    if (width > height) {
-                        if (width > MAX_WIDTH) {
-                            height *= MAX_WIDTH / width;
-                            width = MAX_WIDTH;
+            if (fileSizeMB > 1.0) {
+                // --- Client-Side Image Compression (Optimized for Mobile Memory) ---
+                console.log(`File is ${fileSizeMB.toFixed(2)}MB, compressing...`);
+                fileToSend = await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    const objectUrl = URL.createObjectURL(file);
+
+                    img.onload = () => {
+                        // Immediately revoke the object URL to free up precious mobile RAM
+                        URL.revokeObjectURL(objectUrl);
+
+                        const canvas = document.createElement('canvas');
+                        // Minimized max dimensions to save RAM during rendering
+                        const MAX_WIDTH = 800;
+                        const MAX_HEIGHT = 800;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
                         }
-                    } else {
-                        if (height > MAX_HEIGHT) {
-                            width *= MAX_HEIGHT / height;
-                            height = MAX_HEIGHT;
-                        }
-                    }
 
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
+                        // Ensure dimensions are whole numbers
+                        canvas.width = Math.floor(width);
+                        canvas.height = Math.floor(height);
+                        const ctx = canvas.getContext('2d');
 
-                    // Compress to JPEG with 0.7 quality to ensure it slides under 1MB API limit
-                    canvas.toBlob(
-                        (blob) => {
-                            if (blob) resolve(blob);
-                            else reject(new Error("Canvas to Blob failed"));
-                        },
-                        'image/jpeg',
-                        0.7
-                    );
-                };
-                img.onerror = reject;
-                img.src = URL.createObjectURL(file);
-            });
+                        // Use a background color just in case it's a transparent PNG
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-            // Create form data to send to our backend with the compressed blob
+                        // Compress to JPEG with 0.8 quality
+                        canvas.toBlob(
+                            (blob) => {
+                                // Clear canvas memory explicitly
+                                canvas.width = 0;
+                                canvas.height = 0;
+
+                                if (blob) resolve(blob);
+                                else reject(new Error("Canvas to Blob failed"));
+                            },
+                            'image/jpeg',
+                            0.8
+                        );
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(objectUrl);
+                        reject(new Error("Image failed to load for compression"));
+                    };
+                    img.src = objectUrl;
+                });
+                fileName = 'compressed.jpg';
+            } else {
+                console.log(`File is ${fileSizeMB.toFixed(2)}MB, skipping canvas compression to save memory.`);
+            }
+
+            // Create form data to send to our backend
             const formData = new FormData();
-            // Important: add '.jpg' extension so node's multer keeps a valid extension structure
-            formData.append('medicineImage', compressedBlob, 'compressed.jpg');
+            formData.append('medicineImage', fileToSend, fileName);
             // Send the image to our local Node.js backend
             const response = await fetch('/api/scan', {
                 method: 'POST',
